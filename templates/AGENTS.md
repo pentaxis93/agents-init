@@ -34,6 +34,3 @@ AGENTS.md          ← You are here (routing layer)
 - Swapping OS.md for different collaboration styles
 - Sharing TOOLS.md across projects
 - Project-specific customization without touching shared modules
-
----
-*Scaffolded by agents-init v0.1.0*
