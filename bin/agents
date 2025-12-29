@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+#
+# agents - Project scaffolding CLI for multi-agent development
+#
+# Usage:
+#   agents init [project-name]     Create new project scaffolding
+#   agents init -i                 Interactive mode
+#   agents list                    List available templates
+#   agents version                 Show version
+#
+# Configuration is composable:
+#   AGENTS.md  → Thin router (points to everything, contains nothing)
+#   .agents/   → Modular configuration directory
+#     PROJECT.md  → Project-specific context (placeholder)
+#     OS.md       → Tantric Sutras (AI operating system)
+#     TOOLS.md    → Available tools and capabilities
+#     STYLE.md    → Code conventions (optional)
+#     CONTEXT.md  → Domain knowledge, grows over time (optional)
+#
+
+set -euo pipefail
+
+VERSION="0.1.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATES_DIR="${SCRIPT_DIR}/../templates"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# ============================================================
+# Helpers
+# ============================================================
+
+log_info() {
+    echo -e "${BLUE}→${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1" >&2
+}
+
+# ============================================================
+# Commands
+# ============================================================
+
+cmd_version() {
+    echo "agents v${VERSION}"
+}
+
+cmd_help() {
+    cat << 'EOF'
+agents - Project scaffolding CLI for multi-agent development
+
+USAGE:
+    agents <command> [options]
+
+COMMANDS:
+    init [name]     Create new project scaffolding in current directory
+                    If name provided, creates subdirectory
+    init -i         Interactive mode with prompts
+    list            List available template modules
+    version         Show version information
+    help            Show this help message
+
+EXAMPLES:
+    agents init                    # Scaffold in current directory
+    agents init my-project         # Create my-project/ with scaffolding
+    agents init -i                 # Interactive mode
+
+ARCHITECTURE:
+    The tool creates a composable agent configuration:
+
+    project-root/
+    ├── AGENTS.md          # Thin router → points to .agents/*
+    └── .agents/
+        ├── PROJECT.md     # What is this project? (placeholder)
+        ├── OS.md          # Tantric Sutras v7.3 (AI operating system)
+        ├── TOOLS.md       # Available tools and capabilities
+        ├── STYLE.md       # Code conventions (optional)
+        └── CONTEXT.md     # Domain knowledge (grows over time)
+
+    AGENTS.md is the entry point. It routes to modular files.
+    Each file handles one concern. Swap, extend, or omit as needed.
+
+PHILOSOPHY:
+    User owns WHAT. Tool owns HOW.
+    The scaffolding provides structure. You provide intent.
+
+EOF
+}
+
+cmd_list() {
+    echo -e "${BOLD}Available template modules:${NC}"
+    echo ""
+    echo "  AGENTS.md    Thin routing layer (always created)"
+    echo "  PROJECT.md   Project context placeholder (always created)"
+    echo "  OS.md        Tantric Sutras v7.3 - AI operating system (always created)"
+    echo "  TOOLS.md     ACFS tool definitions (always created)"
+    echo "  STYLE.md     Code style conventions (optional)"
+    echo "  CONTEXT.md   Domain knowledge accumulator (optional)"
+    echo ""
+}
+
+cmd_init() {
+    local project_name=""
+    local interactive=false
+    local target_dir="."
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -i|--interactive)
+                interactive=true
+                shift
+                ;;
+            -h|--help)
+                cmd_help
+                exit 0
+                ;;
+            *)
+                project_name="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # Interactive mode
+    if [[ "$interactive" == true ]]; then
+        echo -e "${BOLD}agents init${NC} - Interactive Mode"
+        echo ""
+        read -rp "Project name (leave empty for current dir): " project_name
+    fi
+
+    # Determine target directory
+    if [[ -n "$project_name" ]]; then
+        target_dir="$project_name"
+        if [[ -d "$target_dir" ]]; then
+            log_error "Directory '$target_dir' already exists"
+            exit 1
+        fi
+        mkdir -p "$target_dir"
+        log_info "Created directory: $target_dir"
+    fi
+
+    # Check if already initialized
+    if [[ -f "$target_dir/AGENTS.md" ]] || [[ -d "$target_dir/.agents" ]]; then
+        log_error "Project already initialized (AGENTS.md or .agents/ exists)"
+        exit 1
+    fi
+
+    # Create .agents directory
+    mkdir -p "$target_dir/.agents"
+    log_info "Created .agents/ directory"
+
+    # Copy templates
+    log_info "Copying templates..."
+    
+    # AGENTS.md (router)
+    cp "$TEMPLATES_DIR/AGENTS.md" "$target_dir/AGENTS.md"
+    log_success "AGENTS.md (router)"
+    
+    # PROJECT.md (placeholder)
+    cp "$TEMPLATES_DIR/PROJECT.md" "$target_dir/.agents/PROJECT.md"
+    log_success ".agents/PROJECT.md (placeholder)"
+    
+    # OS.md (Tantric Sutras)
+    cp "$TEMPLATES_DIR/OS.md" "$target_dir/.agents/OS.md"
+    log_success ".agents/OS.md (Tantric Sutras v7.3)"
+    
+    # TOOLS.md
+    cp "$TEMPLATES_DIR/TOOLS.md" "$target_dir/.agents/TOOLS.md"
+    log_success ".agents/TOOLS.md (ACFS tools)"
+
+    # Summary
+    echo ""
+    echo -e "${GREEN}${BOLD}✓ Project scaffolded successfully${NC}"
+    echo ""
+    echo "  Next steps:"
+    echo "    1. Edit .agents/PROJECT.md to describe your project"
+    echo "    2. Review .agents/TOOLS.md for available capabilities"
+    echo "    3. Start working with your agents"
+    echo ""
+    
+    if [[ -n "$project_name" ]]; then
+        echo "  cd $project_name"
+    fi
+}
+
+# ============================================================
+# Main
+# ============================================================
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        cmd_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        init)
+            cmd_init "$@"
+            ;;
+        list)
+            cmd_list
+            ;;
+        version|--version|-v)
+            cmd_version
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            echo "Run 'agents help' for usage"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
