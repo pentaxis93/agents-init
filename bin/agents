@@ -76,7 +76,8 @@ COMMANDS:
                     If name provided, creates subdirectory
     init -i         Interactive mode with prompts
     list            List available template modules
-    update          Update to latest version from GitHub
+    update          Update agents CLI from GitHub
+    upgrade         Upgrade current project's templates (OS.md, TOOLS.md)
     version         Show version information
     help            Show this help message
 
@@ -135,13 +136,41 @@ cmd_update() {
     agents version
 }
 
+cmd_upgrade() {
+    # Check we're in an agents project
+    if [[ ! -f "AGENTS.md" ]] || [[ ! -d ".agents" ]]; then
+        log_error "Not in an agents project (no AGENTS.md or .agents/ found)"
+        exit 1
+    fi
+
+    log_info "Upgrading project templates..."
+
+    # Update AGENTS.md
+    cp "$TEMPLATES_DIR/AGENTS.md" "AGENTS.md"
+    log_success "AGENTS.md"
+
+    # Update OS.md
+    cp "$TEMPLATES_DIR/OS.md" ".agents/OS.md"
+    log_success ".agents/OS.md"
+
+    # Update TOOLS.md
+    cp "$TEMPLATES_DIR/TOOLS.md" ".agents/TOOLS.md"
+    log_success ".agents/TOOLS.md"
+
+    # Skip PROJECT.md (user content)
+    log_warn "Skipped .agents/PROJECT.md (user content)"
+
+    echo ""
+    log_success "Project upgraded to latest templates"
+}
+
 cmd_list() {
     echo -e "${BOLD}Available template modules:${NC}"
     echo ""
     echo "  AGENTS.md    Thin routing layer (always created)"
     echo "  PROJECT.md   Project context placeholder (always created)"
-    echo "  OS.md        Tantric Sutras v7.3 - AI operating system (always created)"
-    echo "  TOOLS.md     ACFS tool definitions (always created)"
+    echo "  OS.md        AI operating system (always created)"
+    echo "  TOOLS.md     Tool definitions (always created)"
     echo "  STYLE.md     Code style conventions (optional)"
     echo "  CONTEXT.md   Domain knowledge accumulator (optional)"
     echo ""
@@ -254,6 +283,9 @@ main() {
             ;;
         update)
             cmd_update
+            ;;
+        upgrade)
+            cmd_upgrade
             ;;
         version|--version|-v)
             cmd_version
