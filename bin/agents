@@ -76,6 +76,7 @@ COMMANDS:
                     If name provided, creates subdirectory
     init -i         Interactive mode with prompts
     list            List available template modules
+    update          Update to latest version from GitHub
     version         Show version information
     help            Show this help message
 
@@ -104,6 +105,34 @@ PHILOSOPHY:
     The scaffolding provides structure. You provide intent.
 
 EOF
+}
+
+cmd_update() {
+    local repo_url="https://github.com/pentaxis93/agents-init.git"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    log_info "Fetching latest version..."
+
+    if ! git clone --quiet "$repo_url" "$tmp_dir" 2>/dev/null; then
+        log_error "Failed to clone repository"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    log_info "Installing update..."
+
+    if ! "$tmp_dir/install.sh" 2>/dev/null; then
+        log_error "Installation failed"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    rm -rf "$tmp_dir"
+
+    echo ""
+    log_success "Updated to latest version"
+    agents version
 }
 
 cmd_list() {
@@ -222,6 +251,9 @@ main() {
             ;;
         list)
             cmd_list
+            ;;
+        update)
+            cmd_update
             ;;
         version|--version|-v)
             cmd_version
