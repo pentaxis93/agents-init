@@ -71,7 +71,3 @@ agents help
 ```bash
 ./install.sh --uninstall
 ```
-
----
-
-*Part of the Recursive Loop development ecosystem*
