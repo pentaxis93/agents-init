@@ -2,25 +2,22 @@
 #
 # agents - Project scaffolding CLI for multi-agent development
 #
-# Usage:
-#   agents init [project-name]     Create new project scaffolding
-#   agents init -i                 Interactive mode
-#   agents list                    List available templates
-#   agents version                 Show version
+# Universal configuration that works with Claude Code, Gemini CLI, and Codex CLI.
 #
-# Configuration is composable:
-#   AGENTS.md  → Thin router (points to everything, contains nothing)
-#   .agents/   → Modular configuration directory
-#     PROJECT.md  → Project-specific context (placeholder)
-#     OS.md       → Tantric Sutras (AI operating system)
-#     TOOLS.md    → Available tools and capabilities
-#     STYLE.md    → Code conventions (optional)
-#     CONTEXT.md  → Domain knowledge, grows over time (optional)
+# Architecture:
+#   .agents/           Source of truth (modular, editable)
+#     PROJECT.md       Project-specific context
+#     OS.md            AI operating system
+#     TOOLS.md         Available tools and capabilities
+#
+#   AGENTS.md          Generated (concatenation of .agents/*)
+#   CLAUDE.md          Symlink → AGENTS.md
+#   GEMINI.md          Symlink → AGENTS.md
 #
 
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 
 # Resolve symlinks to find actual installation location
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -32,8 +29,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
 # ============================================================
@@ -66,114 +62,92 @@ cmd_version() {
 
 cmd_help() {
     cat << 'EOF'
-agents - Project scaffolding CLI for multi-agent development
+agents - Universal project scaffolding for AI coding agents
 
 USAGE:
     agents <command> [options]
 
 COMMANDS:
-    init [name]     Create new project scaffolding in current directory
-                    If name provided, creates subdirectory
-    init -i         Interactive mode with prompts
+    init [name]     Create new project with agent configuration
+    build           Regenerate AGENTS.md from .agents/* sources
+    upgrade         Update templates (OS.md, TOOLS.md) and rebuild
+    update          Update agents CLI itself from GitHub
     list            List available template modules
-    update          Update agents CLI from GitHub
-    upgrade         Upgrade current project's templates (OS.md, TOOLS.md)
     version         Show version information
     help            Show this help message
 
 EXAMPLES:
-    agents init                    # Scaffold in current directory
-    agents init my-project         # Create my-project/ with scaffolding
-    agents init -i                 # Interactive mode
+    agents init my-project     # Create new project
+    agents build               # Rebuild after editing .agents/*
+    agents upgrade             # Get latest OS.md and TOOLS.md
 
 ARCHITECTURE:
-    The tool creates a composable agent configuration:
+    Source files (edit these):
+    .agents/
+    ├── PROJECT.md     # Your project context
+    ├── OS.md          # AI operating system
+    └── TOOLS.md       # Tool definitions
 
-    project-root/
-    ├── AGENTS.md          # Thin router → points to .agents/*
-    └── .agents/
-        ├── PROJECT.md     # What is this project? (placeholder)
-        ├── OS.md          # Tantric Sutras v7.3 (AI operating system)
-        ├── TOOLS.md       # Available tools and capabilities
-        ├── STYLE.md       # Code conventions (optional)
-        └── CONTEXT.md     # Domain knowledge (grows over time)
+    Generated files (don't edit):
+    AGENTS.md          # Concatenated output (for Codex CLI)
+    CLAUDE.md          # Symlink → AGENTS.md (for Claude Code)
+    GEMINI.md          # Symlink → AGENTS.md (for Gemini CLI)
 
-    AGENTS.md is the entry point. It routes to modular files.
-    Each file handles one concern. Swap, extend, or omit as needed.
-
-PHILOSOPHY:
-    User owns WHAT. Tool owns HOW.
-    The scaffolding provides structure. You provide intent.
+WORKFLOW:
+    1. agents init my-project
+    2. Edit .agents/PROJECT.md
+    3. agents build
+    4. All three CLIs see the same configuration
 
 EOF
 }
 
-cmd_update() {
-    local repo_url="https://github.com/pentaxis93/agents-init.git"
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
+cmd_build() {
+    local target_dir="${1:-.}"
 
-    log_info "Fetching latest version..."
-
-    if ! git clone --quiet "$repo_url" "$tmp_dir" 2>/dev/null; then
-        log_error "Failed to clone repository"
-        rm -rf "$tmp_dir"
-        exit 1
-    fi
-
-    log_info "Installing update..."
-
-    if ! "$tmp_dir/install.sh" 2>/dev/null; then
-        log_error "Installation failed"
-        rm -rf "$tmp_dir"
-        exit 1
-    fi
-
-    rm -rf "$tmp_dir"
-
-    echo ""
-    log_success "Updated to latest version"
-    agents version
-}
-
-cmd_upgrade() {
     # Check we're in an agents project
-    if [[ ! -f "AGENTS.md" ]] || [[ ! -d ".agents" ]]; then
-        log_error "Not in an agents project (no AGENTS.md or .agents/ found)"
+    if [[ ! -d "$target_dir/.agents" ]]; then
+        log_error "No .agents/ directory found"
         exit 1
     fi
 
-    log_info "Upgrading project templates..."
+    log_info "Building AGENTS.md..."
 
-    # Update AGENTS.md
-    cp "$TEMPLATES_DIR/AGENTS.md" "AGENTS.md"
+    # Concatenate in order: PROJECT, OS, TOOLS
+    {
+        echo "<!-- Generated by agents-init. Edit files in .agents/ then run 'agents build' -->"
+        echo ""
+
+        if [[ -f "$target_dir/.agents/PROJECT.md" ]]; then
+            cat "$target_dir/.agents/PROJECT.md"
+            echo ""
+            echo "---"
+            echo ""
+        fi
+
+        if [[ -f "$target_dir/.agents/OS.md" ]]; then
+            cat "$target_dir/.agents/OS.md"
+            echo ""
+            echo "---"
+            echo ""
+        fi
+
+        if [[ -f "$target_dir/.agents/TOOLS.md" ]]; then
+            cat "$target_dir/.agents/TOOLS.md"
+        fi
+    } > "$target_dir/AGENTS.md"
+
     log_success "AGENTS.md"
 
-    # Update OS.md
-    cp "$TEMPLATES_DIR/OS.md" ".agents/OS.md"
-    log_success ".agents/OS.md"
+    # Create/update symlinks
+    ln -sf "AGENTS.md" "$target_dir/CLAUDE.md"
+    log_success "CLAUDE.md → AGENTS.md"
 
-    # Update TOOLS.md
-    cp "$TEMPLATES_DIR/TOOLS.md" ".agents/TOOLS.md"
-    log_success ".agents/TOOLS.md"
-
-    # Skip PROJECT.md (user content)
-    log_warn "Skipped .agents/PROJECT.md (user content)"
+    ln -sf "AGENTS.md" "$target_dir/GEMINI.md"
+    log_success "GEMINI.md → AGENTS.md"
 
     echo ""
-    log_success "Project upgraded to latest templates"
-}
-
-cmd_list() {
-    echo -e "${BOLD}Available template modules:${NC}"
-    echo ""
-    echo "  AGENTS.md    Thin routing layer (always created)"
-    echo "  PROJECT.md   Project context placeholder (always created)"
-    echo "  OS.md        AI operating system (always created)"
-    echo "  TOOLS.md     Tool definitions (always created)"
-    echo "  STYLE.md     Code style conventions (optional)"
-    echo "  CONTEXT.md   Domain knowledge accumulator (optional)"
-    echo ""
+    log_success "Build complete"
 }
 
 cmd_init() {
@@ -227,24 +201,21 @@ cmd_init() {
     mkdir -p "$target_dir/.agents"
     log_info "Created .agents/ directory"
 
-    # Copy templates
+    # Copy source templates
     log_info "Copying templates..."
-    
-    # AGENTS.md (router)
-    cp "$TEMPLATES_DIR/AGENTS.md" "$target_dir/AGENTS.md"
-    log_success "AGENTS.md (router)"
-    
-    # PROJECT.md (placeholder)
+
     cp "$TEMPLATES_DIR/PROJECT.md" "$target_dir/.agents/PROJECT.md"
-    log_success ".agents/PROJECT.md (placeholder)"
-    
-    # OS.md (Tantric Sutras)
+    log_success ".agents/PROJECT.md"
+
     cp "$TEMPLATES_DIR/OS.md" "$target_dir/.agents/OS.md"
-    log_success ".agents/OS.md (Tantric Sutras v7.3)"
-    
-    # TOOLS.md
+    log_success ".agents/OS.md"
+
     cp "$TEMPLATES_DIR/TOOLS.md" "$target_dir/.agents/TOOLS.md"
-    log_success ".agents/TOOLS.md (ACFS tools)"
+    log_success ".agents/TOOLS.md"
+
+    # Build the concatenated output
+    echo ""
+    cmd_build "$target_dir"
 
     # Summary
     echo ""
@@ -252,13 +223,84 @@ cmd_init() {
     echo ""
     echo "  Next steps:"
     echo "    1. Edit .agents/PROJECT.md to describe your project"
-    echo "    2. Review .agents/TOOLS.md for available capabilities"
-    echo "    3. Start working with your agents"
+    echo "    2. Run 'agents build' to regenerate AGENTS.md"
+    echo "    3. Start working with Claude, Gemini, or Codex"
     echo ""
-    
+
     if [[ -n "$project_name" ]]; then
         echo "  cd $project_name"
     fi
+}
+
+cmd_upgrade() {
+    # Check we're in an agents project
+    if [[ ! -d ".agents" ]]; then
+        log_error "Not in an agents project (no .agents/ found)"
+        exit 1
+    fi
+
+    log_info "Upgrading templates..."
+
+    # Update OS.md
+    cp "$TEMPLATES_DIR/OS.md" ".agents/OS.md"
+    log_success ".agents/OS.md"
+
+    # Update TOOLS.md
+    cp "$TEMPLATES_DIR/TOOLS.md" ".agents/TOOLS.md"
+    log_success ".agents/TOOLS.md"
+
+    # Skip PROJECT.md (user content)
+    log_warn "Skipped .agents/PROJECT.md (user content)"
+
+    # Rebuild
+    echo ""
+    cmd_build "."
+
+    echo ""
+    log_success "Upgrade complete"
+}
+
+cmd_update() {
+    local repo_url="https://github.com/pentaxis93/agents-init.git"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    log_info "Fetching latest version..."
+
+    if ! git clone --quiet "$repo_url" "$tmp_dir" 2>/dev/null; then
+        log_error "Failed to clone repository"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    log_info "Installing update..."
+
+    if ! "$tmp_dir/install.sh" 2>/dev/null; then
+        log_error "Installation failed"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    rm -rf "$tmp_dir"
+
+    echo ""
+    log_success "Updated to latest version"
+    agents version
+}
+
+cmd_list() {
+    echo -e "${BOLD}Source templates (.agents/):${NC}"
+    echo ""
+    echo "  PROJECT.md   Project context (user edits this)"
+    echo "  OS.md        AI operating system"
+    echo "  TOOLS.md     Tool definitions"
+    echo ""
+    echo -e "${BOLD}Generated files:${NC}"
+    echo ""
+    echo "  AGENTS.md    Concatenated output (Codex CLI)"
+    echo "  CLAUDE.md    Symlink → AGENTS.md (Claude Code)"
+    echo "  GEMINI.md    Symlink → AGENTS.md (Gemini CLI)"
+    echo ""
 }
 
 # ============================================================
@@ -278,14 +320,17 @@ main() {
         init)
             cmd_init "$@"
             ;;
-        list)
-            cmd_list
+        build)
+            cmd_build "."
+            ;;
+        upgrade)
+            cmd_upgrade
             ;;
         update)
             cmd_update
             ;;
-        upgrade)
-            cmd_upgrade
+        list)
+            cmd_list
             ;;
         version|--version|-v)
             cmd_version
